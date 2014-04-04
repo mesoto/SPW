@@ -1,0 +1,369 @@
+// setup script for SoftProbe
+
+#define APPLICATION_SIZE        200000
+#define GROUP_NAME              "SoftProbe"
+#define PRODUCT_KEY             "SoftProbe"
+#if _WNT_=1
+#define APPLICATION_DIRECTORY   "SPWIN\\"
+#define APPLICATION_EXE         "SPWnt.exe"
+#endif
+#if _W95_=1
+#define APPLICATION_DIRECTORY   "SPWIN\\"
+#define APPLICATION_EXE         "SPW95.exe"
+#endif
+#if _W31_=1
+#define APPLICATION_DIRECTORY   "SPWIN\\"
+#define APPLICATION_EXE         "SPW31.exe"
+#endif
+#define APPLICATION_NAME        "SoftProbe"
+#define REMOTE_NAME             "REMOTE"
+#define REMOTE_EXE              "REMOTE.exe"
+#define SPWCC_NAME              "SPWCC"
+#define SPWCC_EXE               "SPWCC.exe"
+
+// used for InstallationInfo() call...
+#define COMPANY_NAME     "SoftProbe International"
+#define PRODUCT_NAME     "SoftProbe System Debugging Tool"
+#define PRODUCT_RELEASE  "1.0"
+
+#define DELAY_TIMEOUT    2
+
+#define UNINSTALL_KEY    "SoftProbe"
+
+#define TOPLEVEL95       "Program Files"
+#define TOPLEVELNT       ""
+#define BASE_REGISTRYNT  "Software\\Microsoft\\Windows NT\\CurrentVersion\\App Paths\\"
+#define BASE_REGISTRY95  "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\"
+#define LIC_TITLE        "SoftProbe License Agreement"
+#define LIC_MSG          "Please read the following license agreement."
+#define LIC_QUESTION     "Do you accept all the terms of this agrement?"
+#define LIC_FILE         "license.txt"
+
+
+declare
+        #include "SDDIALOG.H"
+
+	STRING szGroupName, szApplicationName, szApplicationPath, szApplicationDirectory ;
+	STRING szUninstallLogFileName, szRegistryKey, szTemp, szFileSetName ;
+
+        BOOL   bCanInstall ;
+
+        NUMBER nRc, nWinMajor ;
+        STRING msgADP, msgST, msgSF, msgSSW ;
+	STRING msgCancelSetup, msgNoSpaceToInstall, msgCompressionError  ;
+        STRING msgFinished
+
+        prototype CanInstall( STRING ) ;
+	prototype InitializeGlobals() ;
+	prototype UpdateRegistry() ;
+
+program
+SoftProbeInstall:
+#if DEBUG=1
+	MessageBeep( 0 );
+	MessageBox( "Beginning debug installation of " + APPLICATION_NAME, INFORMATION );
+#endif // DEBUG=1
+	InitializeGlobals() ; // Initialize application global variables
+
+	// hide the background window as we'll be manipulating it
+	Disable( BACKGROUND );
+
+	// show file names during transfer
+	Enable( INDVFILESTATUS );
+
+	// use shorter version of app name due to size of recommened font
+	SetTitle( APPLICATION_NAME + " Setup", 28, WHITE );
+
+	// use longer version of app name in caption
+	SetTitle( PRODUCT_NAME + " Setup", 0, BACKGROUNDCAPTION ); // Caption bar text.
+
+	// make background visible
+	Enable( BACKGROUND );
+
+
+	// set up registry keys and deinstallation information...
+	// NOTE:  the product key field should contain the name of the main executable of
+	//   an application, in our case SPW95.exe
+	InstallationInfo( COMPANY_NAME, APPLICATION_NAME, PRODUCT_RELEASE, PRODUCT_KEY );
+
+// Create a Welcome dialog.
+DisplayWelcome:
+	// can't go back from the Welcome screen!
+	Disable( BACKBUTTON );
+	Welcome( "", 0 );
+
+	// reactivate back button for following dialogs
+	Enable( BACKBUTTON );
+
+// Create a License dialog.
+DisplayLicense:
+    if ( BACK = SdLicense( LIC_TITLE, LIC_MSG, LIC_QUESTION, LIC_FILE ))
+    then
+       goto DisplayWelcome ;
+    endif ;
+
+	// check user software 
+	GetSystemInfo( WINMAJOR, nWinMajor, szTemp ) ;
+
+#if _WNT_=1
+    if ( nWinMajor >= 4 ) then
+      MessageBox( "This version of SoftProbe is for Windows NT only." , INFORMATION ) ;
+      abort;
+    endif ;
+#endif
+#if _W95_=1
+    if ( nWinMajor <  4 ) then
+      MessageBox( "This version of SoftProbe is for Windows 95 only." , INFORMATION ) ;
+      abort;
+    endif ;
+#endif
+
+// get installation path
+GetInstallationPath:
+#if _WNT_=1
+    szApplicationPath = TARGETDISK ^ TOPLEVELNT ^ APPLICATION_DIRECTORY ;
+#endif
+#if _W95_=1
+    szApplicationPath = WINDISK ^ TOPLEVEL95 ^ APPLICATION_DIRECTORY ;
+#endif
+
+	if ( BACK = AskDestPath( "", msgADP, szApplicationPath, 0 ) ) then
+           goto DisplayLicense ;
+	endif ;
+
+	// do we have enough space to install?
+        bCanInstall = CanInstall( szApplicationPath ) ;
+
+	if ( FALSE = bCanInstall ) then 
+           goto GetInstallationPath;
+	endif;
+
+	// If on WinNT, have the user select a folder to install the application to
+	// On Win95, we choose what folder to install to
+GetInstallationFolder:
+#if _WNT_=1
+        szGroupName = GROUP_NAME;
+
+        if ( BACK = SelectFolder( msgSF, szGroupName, szGroupName ) ) then
+           goto GetInstallationPath ;
+        endif;
+#endif
+#if _W95_=1
+        // on Win95, this will go under Programs...
+        szGroupName = APPLICATION_NAME ;
+#endif
+
+DoRegistryUpdates:
+	// Now tell Install SHIELD to start recording deinstallation information...
+	//   The call will set the szUninstallLogFileName to the name of the log file
+	//   that must be used during uninstallation
+	DeinstallStart( szApplicationPath, szUninstallLogFileName, UNINSTALL_KEY, 0 );
+	// sets Uninstall\APPLICATION_NAME
+	RegDBSetItem( REGDB_UNINSTALL_NAME, APPLICATION_NAME );
+#if DEBUG=1
+	MessageBox( "Uninstall file is " + szUninstallLogFileName, INFORMATION ) ;
+#endif // DEBUG=1
+
+	// sets App Path\APPLICATION_NAME valuename=path to szApplicationPath
+	RegDBSetItem( REGDB_APPPATH, szApplicationPath );
+        szTemp = szApplicationPath ^ APPLICATION_EXE ;
+
+	// sets App Path\APPLICATION_NAME valuename=default to szApplicationPath
+	RegDBSetItem( REGDB_APPPATH_DEFAULT, szApplicationPath );
+
+DoFileSet:
+	// Define the file set that we will use for file transfer
+	szFileSetName = APPLICATION_NAME ;
+
+//      SRCDIR = "a:\\" ;
+	TARGETDIR = szApplicationPath ;
+
+#if DEBUG=1
+	MessageBox( "Defining file set:  " + szFileSetName, INFORMATION );
+	MessageBox( "SRCDIR system variable is set to: " + SRCDIR, INFORMATION ) ;
+	MessageBox( "TARGETDIR system variable is set to: " + TARGETDIR, INFORMATION ) ;
+#endif // DEBUG=1
+	FileSetBeginDefine( szFileSetName );
+
+	SetStatusWindow( -1, msgSSW );
+
+        // copy root directory files
+	if ( CompressGet( "SPW95.z", "*.*", COMP_NORMAL ) ) then
+		MessageBox( msgCompressionError, WARNING ) ;
+	endif ;
+		
+#if DEBUG=1
+	MessageBox( "Done file set definition:  " + szFileSetName, INFORMATION );
+#endif // DEBUG=1
+	FileSetEndDefine( szFileSetName );
+
+DoFileCopy:
+	// display progress indicator
+	Enable( STATUSDLG );
+	StatusUpdate( ON, 80 );
+
+	// copy files...
+	nRc = FileSetPerformEz( szFileSetName, 0 );
+
+	switch ( nRc )
+	case FS_DONE: 
+	    // No problems
+//#if DEBUG=1
+	case FS_PACKAGING:
+	     MessageBox( "Packaging", SEVERE ) ;
+
+	case FS_FILENOTINLIB:
+	     MessageBox( "Not in lib", SEVERE ) ;
+//#endif // DEBUG = 1
+	case FS_RESETREQUIRED:
+	     FileSetReset( szFileSetName, 0 ) ;
+	     goto DoFileSet ;
+	default:
+	// other error processing goes here...
+	endswitch;
+
+DoMoreRegistryUpdates:
+	UpdateRegistry() ;
+	Delay( DELAY_TIMEOUT );
+
+	// Create folder (groups) and objects
+DoShellUpdate:
+	SetStatusWindow( 90, "Creating folder and objects...." );
+
+	// on Win95, the following creates a Programs object...
+        CreateProgramFolder( szGroupName );
+#if DEBUG=1
+	MessageBox( "Created group: " + szGroupName, INFORMATION ) ;
+#endif // DEBUG=1
+	ShowProgramFolder( szGroupName, SW_SHOW );
+	LongPathToShortPath( szApplicationDirectory );
+	Delay( DELAY_TIMEOUT );
+
+        szTemp = szApplicationPath ^ "README.TXT" ;
+#if _W95_=1
+        LongPathToQuote( szTemp, TRUE );
+#endif
+        AddFolderIcon( szGroupName,
+                       "Read Me", "NOTEPAD " + szTemp,
+                       "",     // working directory
+                       "", 0,  // icon information
+                       "",     // short cut
+                       REPLACE ) ;
+
+        szTemp = szApplicationPath ^ "SPW95.INI" ;
+#if _W95_=1
+        LongPathToQuote( szTemp, TRUE );
+#endif
+        AddFolderIcon( szGroupName,
+                       "Configure", "NOTEPAD " + szTemp,
+                       "",     // working directory
+                       "", 0,  // icon information
+                       "",     // short cut
+                       REPLACE ) ;
+
+        szTemp = szApplicationPath ^ SPWCC_EXE ;
+#if _W95_=1
+        LongPathToQuote( szTemp, TRUE );
+#endif
+        AddFolderIcon( szGroupName,
+                       SPWCC_NAME, szTemp,
+                       "",     // working directory
+                       "", 0,  // icon information
+                       "",     // short cut
+                       REPLACE );
+
+        szTemp = szApplicationPath ^ REMOTE_EXE ;
+#if _W95_=1
+        LongPathToQuote( szTemp, TRUE );
+#endif
+        AddFolderIcon( szGroupName,
+                       REMOTE_NAME, szTemp,
+                       "",     // working directory
+                       "", 0,  // icon information
+                       "",     // short cut
+                       REPLACE );
+
+        szTemp = WINDIR ^ "UNINST.EXE";
+        LongPathToShortPath( szTemp );
+        LongPathToShortPath( szUninstallLogFileName );
+        AddFolderIcon( szGroupName, "unInstallShield",
+                       szTemp + " -f" + szUninstallLogFileName,
+                       WINDIR,
+                       "", 0, "", REPLACE );
+
+        Delay( DELAY_TIMEOUT );
+
+	// On NT, our setup program is now behind ProgMan.  Bring the status dialog
+	//   to the front
+	Enable( STATUSDLG );
+
+	SetStatusWindow( 100, "Installation successful." );
+	Delay( DELAY_TIMEOUT ) ;
+
+	// this installation does not use shared files.  If it had, the
+	//   BATCH_INSTALL system variable would be set to TRUE if the system
+	//   must be rebooted for install to continue
+	//   You would call:
+	//      CommitSharedFiles() and RebootDialog()
+
+	MessageBeep( 0 );
+        MessageBox( msgFinished, INFORMATION );
+
+	// you might offer to load the readme file so that users might have a look...
+	 
+	exit;
+
+function CanInstall( szDestination )
+	NUMBER nSpaceNeeded ;
+	NUMBER nSpaceAvailable ;
+	begin
+	  // How much space will we need for a successful install?
+          nSpaceNeeded = APPLICATION_SIZE;
+
+	  nSpaceAvailable = GetDiskSpace( szDestination ) ;
+
+	  if ( nSpaceAvailable < nSpaceNeeded ) then
+	     MessageBeep(0);
+	     MessageBox( msgNoSpaceToInstall, WARNING );
+	     return FALSE ;
+	  else
+	     return TRUE ;
+	  endif;
+
+	end;
+
+function InitializeGlobals() 
+	begin ;
+	  msgADP = "" ;  // use the default message
+	  msgST = "" ;   // use the default message
+	  msgSF = "" ;   // use the default message
+	  msgSSW = "Transferring files.  Please wait..." ;
+	  msgCompressionError = "Installation error!" ;
+
+          msgFinished = "Setup is complete.\n"
+                      + "See the ReadMe.txt file for instructions on how to start SoftProbe.\n"
+                      + "You may configure SoftProbe by double-clicking the Configure icon.\n\n";
+          // msgFinished95 = "by clicking the program icon in the Programs\\" + GROUP_NAME + "  menu.\n\n" ;
+          // msgFinishedNT = "by double-clicking the program icon in the " + GROUP_NAME + " group.\n\n" ;
+
+	  msgCancelSetup = "You have asked to cancel installation.  If you cancel now, then"+
+		APPLICATION_NAME + " will not be successfully installed.  Cancel installation?" ;
+
+	  msgNoSpaceToInstall = "There is not enough space to install the options that you have"+
+		"selected.\nPlease free up some disk space, select fewer components or change"+
+		" the installation directory to a device with more space available" ;
+	end ;
+
+function UpdateRegistry()
+	string szKey[ 512 ], szValue ;
+begin
+	RegDBSetDefaultRoot( HKEY_LOCAL_MACHINE );
+
+	// Create PRODUCT_KEY key.
+	szKey = "SOFTWARE\\" + COMPANY_NAME + "\\" + PRODUCT_NAME + "\\" +
+		PRODUCT_RELEASE ;
+	RegDBCreateKeyEx( szKey, "" );
+end;
+
+        #include "SDDIALOG.rul"
+

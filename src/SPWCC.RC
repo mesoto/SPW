@@ -1,0 +1,49 @@
+#include "windows.h"
+#include "SPWCC.h"
+
+APPICON ICON    DISCARDABLE     "SPWCC.ico"
+
+////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+SYMLOGDLG DIALOG DISCARDABLE  50, 20, 200, 139
+STYLE DS_MODALFRAME | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
+CAPTION "SoftProbe"
+FONT 8, "Arial"
+BEGIN
+    DEFPUSHBUTTON   "Exit",IDC_EXIT,158,117,35,12
+    LTEXT           "Log file :",IDC_STATIC,8,0,37,10
+    EDITTEXT        IDC_FILENAME,8,10,112,12,ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse",IDC_BROWSE,122,10,35,12
+    PUSHBUTTON      "View",IDC_VIEW,158,10,35,12
+    CONTROL         "Append to end",IDC_APPEND,"Button",BS_AUTOCHECKBOX |
+                    WS_TABSTOP,8,25,80,10
+    PUSHBUTTON      "Load",IDC_LOAD,122,23,35,12
+    PUSHBUTTON      "Move",IDC_MOVE,158,23,35,12
+    LTEXT           "Loaded Modules:",IDC_STATIC,8,40,63,8
+    LISTBOX         IDC_MODLIST,8,52,112,64,LBS_USETABSTOPS |
+                    LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Add",IDC_ADD,7,117,57,12
+    PUSHBUTTON      "Remove",IDC_REMOVE,64,117,57,12
+    LTEXT           "Total:\nUsed:\nFree:",-1,122,52,25,25,NOT WS_GROUP
+    RTEXT           "",IDC_SYMINFO,148,52,30,25,NOT WS_GROUP
+END
+
+ABOUTBOX DIALOG DISCARDABLE  30, 50, 180, 100
+STYLE DS_LOCALEDIT | DS_MODALFRAME | WS_POPUP | WS_VISIBLE | WS_CAPTION | 
+    WS_SYSMENU
+CAPTION "SoftProbe"
+FONT 8, "Helv"
+BEGIN
+    CTEXT           "SoftProbe",-1,0,5,180,8,NOT WS_GROUP
+    CTEXT           "Version 1.00",-1,0,14,180,8,NOT WS_GROUP
+    CTEXT           "For MS-Windows",-1,0,29,180,8,NOT WS_GROUP
+    CTEXT           "(C) Copyright 1996 Mehdi Sotoodeh.",
+                    -1,0,47,180,9,NOT WS_GROUP
+    CTEXT           "All rights reserved.",-1,0,56,180,9,NOT WS_GROUP
+    DEFPUSHBUTTON   "OK",1,74,74,32,14,WS_GROUP
+    ICON            "AppIcon",-1,7,5,0,0
+END
+
